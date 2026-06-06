@@ -4,7 +4,7 @@ from langchain_openrouter import ChatOpenRouter
 
 load_dotenv()
 
-llm = ChatOpenRouter(model="qwen/qwen3.6-flash")
+llm = ChatOpenRouter(model="~anthropic/claude-haiku-latest")
 
 with open("blood_work.txt", "r") as f:
     blood_report = f.read()
@@ -29,3 +29,20 @@ extracted_values = extraction_response.text
 
 print("=== STAGE 1: EXTRACTED VALUES ===")
 print(extracted_values)
+
+diet_prompt = f"""
+You are a clinical nutritionist specializing in Indian dietary habits.
+
+Based on the blood work analysis below, write:
+1. A short health summary in 4-5 lines explaining the patient's condition in simple language
+2. A short, practical Indian diet plan having only two sections (1) Foods to avoid (2) Foods to eat more of. 
+   Do not include any other sections in diet plan.
+
+Blood Work Analysis:
+{extracted_values}
+"""
+
+diet_response = llm.invoke(diet_prompt)
+
+print("=== STAGE 2: HEALTH SUMMARY & DIET PLAN ===")
+print(diet_response.text)
