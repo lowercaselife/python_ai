@@ -21,6 +21,8 @@ python_ai/
 │   ├── rag_demo.py                # Full RAG pipeline — load, chunk, embed, retrieve, answer
 │   ├── rag_demo.ipynb             # Jupyter notebook version of the RAG demo
 │   └── chroma_db/                 # Persisted Chroma vector store (auto-created on first run)
+├── product_query_agent/
+│   └── agent.py                   # Multi-tool agent with conversation memory (MemorySaver)
 ├── .env                           # API keys (not committed)
 ├── pyproject.toml                 # Project metadata and pinned dependencies
 └── uv.lock                        # Lockfile (managed by uv)
@@ -106,17 +108,30 @@ messages = prompt_template.format_messages(style=customer_style, text=customer_e
 response = get_completion(messages)
 ```
 
-### 4. Agents (`agent.py`)
+### 4. Multi-Tool Agent with Conversation Memory (`product_query_agent/agent.py`)
 
-Building a LangChain agent with `create_agent` — an LLM with a reasoning harness:
+A stateful agent that can look up product details and customer reviews across a multi-turn conversation, remembering context between questions.
+
+**Tools:**
+- `get_product(name)` — returns price, rating, and description from the `PRODUCTS` dict
+- `get_review(name)` — returns review count and rating from the `REVIEWS` dict
+
+Both tools list available product names in their docstrings and fallback messages so the agent can self-correct if it passes an unrecognised name.
+
+**Conversation memory** is enabled via `MemorySaver` and a `thread_id`, allowing follow-up questions like *"What is the price of this item?"* to resolve *"this item"* from the previous turn:
 
 ```python
-from langchain.agents import create_agent
-from langchain_openrouter import ChatOpenRouter
+from langgraph.checkpoint.memory import MemorySaver
 
-model = ChatOpenRouter(model="anthropic/claude-haiku-latest")
-agent = create_agent(model)
-response = agent.invoke({"messages": [HumanMessage(content="...")]})
+agent = create_agent(
+    model,
+    tools=[get_product, get_review],
+    system_prompt="You are a helpful product assistant for an online tech store.",
+    checkpointer=MemorySaver(),
+)
+
+config = {"configurable": {"thread_id": "1"}}
+agent.invoke({"messages": [{"role": "user", "content": question}]}, config=config)
 ```
 
 ### 5. Applied LLM Pipeline — Health Analysis (`health_analysis/`)
@@ -243,4 +258,7 @@ uv run streamlit run health_analysis/streamlit_app/app.py
 
 # RAG pipeline
 uv run python RAG/rag_demo.py
+
+# Product query agent (multi-tool, with memory)
+uv run python product_query_agent/agent.py
 ```

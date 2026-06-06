@@ -25,3 +25,12 @@ for i, emb in enumerate(data["embeddings"]):
     print("Text:", data["documents"][i])
     print("Embedding length:", len(emb))
     print("First 10 values of the embedding:", emb[:10])
+
+
+result = collection.query(
+    query_texts=["What is the profit of Tesla in Q2?"],
+    n_results=2
+)
+
+print(result)
+
