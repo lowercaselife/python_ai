@@ -5,7 +5,7 @@ from langchain_core.prompts import ChatPromptTemplate
 load_dotenv()
 
 
-model = ChatOpenRouter(model="qwen/qwen3.6-flash", temperature=2.0)
+model = ChatOpenRouter(model="qwen/qwen3-235b-a22b-2507", temperature=2.0)
 
 response = model.invoke("What is the capital of the moon?")
 

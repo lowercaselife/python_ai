@@ -23,6 +23,9 @@ python_ai/
 │   └── chroma_db/                 # Persisted Chroma vector store (auto-created on first run)
 ├── product_query_agent/
 │   └── agent.py                   # Multi-tool agent with conversation memory (MemorySaver)
+├── multimodal_agent/
+│   ├── blood_work.png             # Sample bloodwork image (input)
+│   └── multimodal.py              # Multimodal agent — reads bloodwork image, calls diet tool, streams output
 ├── .env                           # API keys (not committed)
 ├── pyproject.toml                 # Project metadata and pinned dependencies
 └── uv.lock                        # Lockfile (managed by uv)
@@ -134,7 +137,45 @@ config = {"configurable": {"thread_id": "1"}}
 agent.invoke({"messages": [{"role": "user", "content": question}]}, config=config)
 ```
 
-### 5. Applied LLM Pipeline — Health Analysis (`health_analysis/`)
+### 5. Multimodal Agent with Streaming — Blood Work Analyser (`multimodal_agent/multimodal.py`)
+
+A multimodal agentic pipeline that reads a blood work image and produces personalised dietary recommendations, with streamed output to reduce perceived latency.
+
+**Flow:**
+
+1. The blood work image is base64-encoded and passed to the agent as a multimodal message
+2. The LLM extracts all test results from the image and flags any values outside the normal range
+3. The agent calls the `get_diet_recommendation` tool with the extracted report
+4. A second LLM call inside the tool generates evidence-based dietary recommendations
+5. The final response streams to the terminal token-by-token via `AIMessageChunk`
+
+**`get_diet_recommendation` tool:**
+
+```python
+@tool
+def get_diet_recommendation(bloodwork_report: str) -> str:
+    """Generate personalized diet recommendations based on a patient's extracted bloodwork report."""
+    rec_model = ChatOpenRouter(model="~anthropic/claude-haiku-latest")
+    response = rec_model.invoke(f"...{bloodwork_report}...")
+    return response.content
+```
+
+**Streaming** uses LangGraph's `stream_mode="messages"`, filtering on `AIMessageChunk` to print only the LLM's text tokens as they arrive:
+
+```python
+for chunk, metadata in agent.stream({"messages": [message]}, config=config, stream_mode="messages"):
+    if isinstance(chunk, AIMessageChunk) and chunk.content:
+        print(chunk.content, end="", flush=True)
+```
+
+```bash
+cd multimodal_agent
+uv run python multimodal.py
+```
+
+---
+
+### 6. Applied LLM Pipeline — Health Analysis (`health_analysis/`)
 
 A real-world multi-stage pipeline that reads a blood work report and extracts structured insights:
 
@@ -142,7 +183,7 @@ A real-world multi-stage pipeline that reads a blood work report and extracts st
 - **Stage 2:** Generate a plain-language health summary and an Indian diet plan (foods to avoid / eat more of)
 - Demonstrates reading files, crafting domain-specific prompts, and chaining LLM calls
 
-### 6. Streamlit Web Frontend (`health_analysis/streamlit_app/app.py`)
+### 7. Streamlit Web Frontend (`health_analysis/streamlit_app/app.py`)
 
 An interactive browser UI wrapping the two-stage health analysis pipeline:
 
@@ -154,7 +195,7 @@ An interactive browser UI wrapping the two-stage health analysis pipeline:
 uv run streamlit run health_analysis/streamlit_app/app.py
 ```
 
-### 7. Retrieval-Augmented Generation — RAG (`RAG/rag_demo.py`)
+### 8. Retrieval-Augmented Generation — RAG (`RAG/rag_demo.py`)
 
 A complete RAG pipeline that lets an LLM answer questions grounded strictly in a PDF document, preventing hallucination by limiting it to retrieved context only.
 
@@ -209,6 +250,7 @@ The project uses [OpenRouter](https://openrouter.ai/models) to access multiple m
 | `qwen/qwen3.6-flash` | Default — fast iteration | Low latency, very economical |
 | `moonshotai/kimi-k2.6` | High-quality responses | Large MoE model, slower (~30s) |
 | `google/gemma-4-26b-a4b-it:free` | Free tier fallback | Rate-limited under load |
+| `~anthropic/claude-haiku-latest` | Multimodal agent & diet tool | Supports vision input; used for image-based bloodwork analysis |
 | `anthropic/claude-haiku-latest` | Health analysis & RAG pipeline | Fast, instruction-following, cost-effective |
 
 To swap models, change the model string — all models share the same `ChatOpenRouter` interface:
@@ -261,4 +303,8 @@ uv run python RAG/rag_demo.py
 
 # Product query agent (multi-tool, with memory)
 uv run python product_query_agent/agent.py
+
+# Multimodal bloodwork agent (streamed output)
+cd multimodal_agent
+uv run python multimodal.py
 ```
